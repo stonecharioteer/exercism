@@ -10,9 +10,9 @@ pr-calendar:
     echo "📊 PR Closure Activity Calendar" | gum style --foreground 212 --bold
     echo
     
-    # Get PR closure data
-    gh pr list --state closed --limit 200 --json closedAt,number,title | \
-    jq -r '.[] | select(.closedAt != null) | .closedAt[:10]' | \
+    # Get PR closure data (only exercism-sync branches)
+    gh pr list --state closed --limit 200 --json closedAt,number,title,headRefName | \
+    jq -r '.[] | select(.closedAt != null and (.headRefName | startswith("exercism-sync"))) | .closedAt[:10]' | \
     sort | uniq -c | \
     awk '{print $2 " " $1}' > /tmp/pr_dates.txt
     
@@ -99,14 +99,14 @@ pr-calendar:
     
     echo
     echo "Legend:" | gum style --foreground 39 --bold
-    echo "🔥 10+ PRs   🚀 6-10 PRs   ✅ 1-5 PRs" | gum style --foreground 242
+    echo "🔥 10+ solutions   🚀 6-10 solutions   ✅ 1-5 solutions" | gum style --foreground 242
     
     # Show detailed daily activity for this month
     echo
-    echo "Daily PR Activity:" | gum style --foreground 39 --bold
+    echo "Daily Exercise Solutions:" | gum style --foreground 39 --bold
     
     # Build detailed activity table
-    activity_data="Date,Day,PRs Closed"
+    activity_data="Date,Day,Solutions"
     
     # Get all dates with PR activity this month and format them
     grep "^$current_year-$current_month" /tmp/pr_dates.txt 2>/dev/null | while read date count; do
@@ -136,7 +136,7 @@ pr-calendar:
     if [ -s /tmp/activity_table.txt ]; then
         (echo "$activity_data"; cat /tmp/activity_table.txt) | gum table --print
     else
-        echo "No PR activity this month" | gum style --foreground 242
+        echo "No exercise solutions this month" | gum style --foreground 242
     fi
     
     # Show this month's stats
@@ -144,53 +144,53 @@ pr-calendar:
     echo "This Month's Summary:" | gum style --foreground 39 --bold
     total_this_month=$(grep "^$current_year-$current_month" /tmp/pr_dates.txt | awk '{sum += $2} END {print sum+0}')
     active_days=$(grep "^$current_year-$current_month" /tmp/pr_dates.txt | wc -l)
-    echo "Total PRs closed: $total_this_month" | gum style --foreground 46
+    echo "Exercise solutions submitted: $total_this_month" | gum style --foreground 46
     echo "Active days: $active_days" | gum style --foreground 46
     if [ "$active_days" -gt 0 ]; then
-        avg_prs=$(echo "scale=1; $total_this_month / $active_days" | bc -l 2>/dev/null || echo "0")
-        echo "Average PRs per active day: $avg_prs" | gum style --foreground 46
+        avg_solutions=$(echo "scale=1; $total_this_month / $active_days" | bc -l 2>/dev/null || echo "0")
+        echo "Average solutions per active day: $avg_solutions" | gum style --foreground 46
     fi
     
     rm -f /tmp/pr_dates.txt /tmp/activity_table.txt
 
 # Show detailed PR stats
 stats:
-    @echo "📈 Detailed PR Statistics" | gum style --foreground 212 --bold
+    @echo "📈 Detailed Exercise Statistics" | gum style --foreground 212 --bold
     @echo
-    @echo "Total PRs (all time):" | gum style --foreground 39
-    @gh pr list --state all --limit 1000 | wc -l
+    @echo "Total exercise solutions (all time):" | gum style --foreground 39
+    @gh pr list --state all --limit 1000 --json headRefName | jq -r '.[] | select(.headRefName | startswith("exercism-sync"))' | wc -l
     @echo
-    @echo "Open PRs:" | gum style --foreground 46
-    @gh pr list --state open | wc -l
+    @echo "Pending solutions:" | gum style --foreground 46
+    @gh pr list --state open --json headRefName | jq -r '.[] | select(.headRefName | startswith("exercism-sync"))' | wc -l
     @echo
-    @echo "Closed PRs:" | gum style --foreground 196
-    @gh pr list --state closed --limit 1000 | wc -l
+    @echo "Submitted solutions:" | gum style --foreground 196
+    @gh pr list --state closed --limit 1000 --json headRefName | jq -r '.[] | select(.headRefName | startswith("exercism-sync"))' | wc -l
     @echo
-    @echo "Most recent PRs:" | gum style --foreground 39
-    @gh pr list --state all --limit 5
+    @echo "Most recent solutions:" | gum style --foreground 39
+    @gh pr list --state all --limit 5 --json number,title,headRefName | jq -r '.[] | select(.headRefName | startswith("exercism-sync")) | "#\(.number) - \(.title)"'
 
-# Show today's PR activity
+# Show today's exercise activity
 today:
     #!/usr/bin/env bash
     today=$(date +%Y-%m-%d)
-    echo "📅 Today's PR Activity ($today)" | gum style --foreground 212 --bold
+    echo "📅 Today's Exercise Activity ($today)" | gum style --foreground 212 --bold
     echo
     
-    closed_today=$(gh pr list --state closed --limit 100 --json closedAt,number,title | \
-        jq -r ".[] | select(.closedAt | startswith(\"$today\")) | \"#\(.number) - \(.title)\"")
+    closed_today=$(gh pr list --state closed --limit 100 --json closedAt,number,title,headRefName | \
+        jq -r ".[] | select(.closedAt | startswith(\"$today\") and (.headRefName | startswith(\"exercism-sync\"))) | \"#\(.number) - \(.title)\"")
     
     if [ -z "$closed_today" ]; then
-        echo "No PRs closed today" | gum style --foreground 242
+        echo "No exercise solutions submitted today" | gum style --foreground 242
     else
-        echo "PRs closed today:" | gum style --foreground 46
+        echo "Solutions submitted today:" | gum style --foreground 46
         echo "$closed_today" | gum style --foreground 39
     fi
 
-# Merge all open PRs (use with caution!)
+# Merge all open exercism solutions (use with caution!)
 merge-all:
-    @echo "⚠️  This will merge ALL open PRs!" | gum style --foreground 196 --bold
+    @echo "⚠️  This will merge ALL open exercism solutions!" | gum style --foreground 196 --bold
     @gum confirm "Are you sure you want to continue?" && \
-        gh pr list --json number | jq -r '.[].number' | xargs -I {} gh pr merge {} --squash --delete-branch
+        gh pr list --json number,headRefName | jq -r '.[] | select(.headRefName | startswith("exercism-sync")) | .number' | xargs -I {} gh pr merge {} --squash --delete-branch
 
 # Show help
 help:
